@@ -46,6 +46,17 @@ DeepSeek receives a dedicated Oceanparkasset recruiting brief for every first me
 
    (If you'd rather run it manually for development, `uvicorn app.main:app --reload --port 8765` still works — but avoid `--reload` for anything long-running: an open extension connection can make it hang mid-reload.)
 
+### Start the server from the extension (optional)
+
+Instead of a login service, the extension can start and stop the backend with its **Start server** / **Stop server** button. Chrome extensions cannot launch programs directly, so this uses a small native messaging helper ([native/him_host.py](native/him_host.py)):
+
+```bash
+python3 -m venv ~/.venvs/him && ~/.venvs/him/bin/pip install -r requirements.txt   # once, if you skipped the service install
+./scripts/install-native-host.sh   # once per machine (Linux/macOS); registers the helper for Chrome, Chromium, Brave and Edge
+```
+
+Then reload the extension at `chrome://extensions`. If the systemd service from `install-service.sh` is installed, the button controls it; otherwise the helper starts uvicorn in the background (log: `~/.local/share/him/backend.log`). The extension ID is fixed by the `key` in `extension/manifest.json`, so the helper trusts only this extension. Windows is not covered by the installer.
+
 Before first use, run `supabase_schema.sql` in the Supabase SQL Editor. The send path fails closed until Supabase is reachable and the table exists.
 
 4. Load `extension/` in Chrome or Chromium at `chrome://extensions` using **Load unpacked** — select the `extension` folder itself, not the project root. As long as the background service is running (step 3), the extension works immediately — no separate server process to start each time.
