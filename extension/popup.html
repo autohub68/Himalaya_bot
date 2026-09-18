@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hiring Assistant</title><link rel="stylesheet" href="popup.css"><style>.progress-card{display:grid;gap:10px}.progress-track{height:5px;background:#25332a;border-radius:99px;overflow:hidden}.progress-track span{display:block;height:100%;width:0;background:#c7ef73;border-radius:99px;transition:width .3s ease}.progress-numbers{display:flex;align-items:baseline;gap:5px;color:#8e9b91}.progress-numbers strong{font-size:18px;color:#eef4ed;margin-left:8px}.progress-numbers strong:first-child{margin-left:0}.progress-detail{display:flex;justify-content:space-between;gap:12px;color:#8e9b91;font-size:10px}.progress-detail strong{color:#eef4ed;text-align:right;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.page-summary{display:flex;justify-content:space-between;align-items:center;padding:12px 13px;border:1px solid #25332a;border-radius:7px;background:#111a14;color:#8e9b91}.page-summary strong{color:#eef4ed}.activity-log{display:grid;gap:5px;max-height:270px;overflow:auto}.log-row{display:grid;grid-template-columns:7px 1fr auto;align-items:center;gap:9px;padding:9px 10px;border:1px solid #25332a;border-radius:6px;background:#111a14}.log-dot{width:7px;height:7px;border-radius:50%;background:#5d6b61}.log-row.sent .log-dot{background:#c7ef73}.log-row.failed .log-dot{background:#ee8179}.log-row.scheduled .log-dot,.log-row.approved .log-dot{background:#f3a66e}.log-name{font-weight:800;font-size:11px}.log-detail{color:#5d6b61;font-size:9px;margin-top:3px}.log-status{font:9px 'DM Mono',monospace;color:#c7ef73;text-transform:uppercase}.log-row.failed .log-status{color:#ee8179}.log-time{color:#5d6b61;font:9px 'DM Mono',monospace;text-align:right}.log-empty{color:#8e9b91;font-size:11px;padding:12px 0}.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:14px 0 2px}.tab-button{background:transparent;border:1px solid #25332a;color:#8e9b91}.tab-button.active{background:#162119;color:#c7ef73;border-color:#98bf4d}.tab-panel[hidden]{display:none}.settings-form{display:grid;gap:13px}.settings-group{display:grid;gap:8px;padding:14px 0;border-top:1px solid #25332a}.settings-group h2{font-size:12px;color:#eef4ed}.field{display:grid;gap:5px}.field label{color:#8e9b91;font:9px 'DM Mono',monospace;text-transform:uppercase}.field input,.field select{width:100%;border:1px solid #25332a;border-radius:6px;background:#111a14;color:#eef4ed;padding:9px;font:11px Manrope}.settings-note{color:#5d6b61;font-size:10px;line-height:1.45}.save-settings{width:100%;margin-top:4px}.settings-result{min-height:15px;color:#c7ef73;font-size:10px}.conversation-list,.conversation-messages{display:grid;gap:6px;max-height:290px;overflow:auto}.conversation-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px;border:1px solid #25332a;border-radius:7px;background:#111a14;color:#eef4ed;cursor:pointer;text-align:left;width:100%}.conversation-row.active{border-color:#98bf4d;background:#162119}.conversation-row strong{font-size:11px}.conversation-row small{display:block;color:#5d6b61;font-size:9px;margin-top:4px}.conversation-row .tag{font-size:8px}.conversation-summary{color:#8e9b91;font-size:10px;line-height:1.45;padding:10px 0}.chat-bubble{max-width:92%;padding:9px 10px;border-radius:7px;background:#162119;color:#d7e2d6;font-size:10px;line-height:1.45}.chat-bubble.outbound{margin-left:auto;background:#263b25}.chat-bubble small{display:block;color:#80917f;font:9px 'DM Mono',monospace;margin-top:5px}.chat-empty{color:#8e9b91;font-size:11px;padding:12px 0}</style></head>
+<style>.unread-badge{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:4px;border-radius:99px;background:#ee8179;color:#1b0d0c;font:800 9px 'DM Mono',monospace}.conversation-row.unread{border-color:#c7ef73}.row-unread{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:5px;border-radius:99px;background:#ee8179;color:#1b0d0c;font:800 9px 'DM Mono',monospace;text-align:center}</style>
+<body>
+  <main>
+    <header>
+      <div class="brand"><span class="brand-mark">H</span><div><p class="eyebrow">HIMALAYAS / RECRUITING</p><h1>Hiring command</h1></div></div>
+      <button id="refresh" class="icon-button" aria-label="Refresh dashboard" title="Refresh dashboard">↻</button>
+    </header>
+    <div class="service-row"><span id="service-dot" class="service-dot"></span><p id="status" class="status">Checking local service...</p><button id="auth" class="text-button">Connect Himalayas</button></div>
+    <nav class="tabs" aria-label="Dashboard sections"><button id="dashboard-tab" class="tab-button active">Dashboard</button><button id="chats-tab" class="tab-button">Chats <span id="unread-badge" class="unread-badge" hidden>0</span></button><button id="settings-tab" class="tab-button">Settings</button></nav>
+
+    <div id="dashboard-panel" class="tab-panel">
+
+    <section class="overview">
+      <div class="section-kicker"><span>OPERATIONS OVERVIEW</span><span id="last-updated">--:--</span></div>
+      <div class="metrics">
+        <div class="metric"><span class="metric-label">Profiles</span><strong id="metric-profiles">--</strong><span id="metric-profiles-detail" class="metric-detail">indexed locally</span></div>
+        <div class="metric"><span class="metric-label">Queued to send</span><strong id="metric-ready">--</strong><span id="metric-ready-detail" class="metric-detail">paced delivery</span></div>
+        <div class="metric"><span class="metric-label">Messages sent</span><strong id="metric-sent">--</strong><span id="metric-sent-detail" class="metric-detail">delivery history</span></div>
+      </div>
+    </section>
+
+    <section class="workflow-section">
+      <div class="section-kicker"><span>BOT ACTIVITY</span><span class="live-label"><i></i> LIVE</span></div>
+      <div class="workflow">
+        <div class="workflow-step complete"><span class="step-icon">01</span><div><strong>Discover</strong><small>Profile sync</small></div></div>
+        <div class="workflow-line"></div>
+        <div class="workflow-step complete"><span class="step-icon">02</span><div><strong>Route</strong><small>AI classification</small></div></div>
+        <div class="workflow-line"></div>
+        <div id="outreach-step" class="workflow-step"><span class="step-icon">03</span><div><strong>Reach out</strong><small id="outreach-step-detail">Awaiting launch</small></div></div>
+        <div class="workflow-line"></div>
+        <div class="workflow-step"><span class="step-icon">04</span><div><strong>Follow up</strong><small>Scheduler ready</small></div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><p class="eyebrow section-eyebrow">CANDIDATE INBOX</p><h2 id="page-title">Page 1</h2></div><div class="actions"><button id="previous" class="secondary-button" disabled>Previous</button><button id="next" class="secondary-button">Next page</button><button id="sync">Sync page</button></div></div>
+      <div class="page-summary"><span>Profiles on this page</span><strong id="page-count">0</strong></div>
+      <button id="launch" class="launch-button">Start page outreach <span>→</span></button>
+        <button id="stop" class="stop-button" hidden>Stop automation</button>
+    </section>
+
+    <section class="activity-section">
+      <div class="section-head"><div><p class="eyebrow section-eyebrow">DELIVERY MONITOR</p><h2>Sending progress</h2></div><span id="activity-count" class="count-badge">LIVE</span></div>
+      <div class="item progress-card">
+        <div class="item-top"><span class="name">Campaign progress</span><span id="progress-state" class="tag">IDLE</span></div>
+        <div class="progress-track"><span id="progress-bar"></span></div>
+        <div class="progress-numbers"><strong id="progress-sent">0</strong><span>sent</span><strong id="progress-queued">0</strong><span>remaining</span><strong id="progress-failed">0</strong><span>failed</span></div>
+        <div class="progress-detail"><span>Current recipient</span><strong id="current-recipient">No message waiting</strong></div>
+        <div class="progress-detail"><span>Next delivery</span><strong id="next-delivery">No scheduled message</strong></div>
+        <p id="latest-result" class="detail">Waiting for delivery activity.</p>
+      </div>
+      <div id="activity-log" class="activity-log"></div>
+    </section>
+    </div>
+    <div id="chats-panel" class="tab-panel" hidden>
+      <section><div class="section-kicker"><span>CONVERSATION INBOX</span><span id="chat-count">0</span></div><div id="conversation-list" class="conversation-list"></div></section>
+      <section class="conversation-detail"><div class="section-head"><div><p class="eyebrow section-eyebrow">SELECTED CONVERSATION</p><h2 id="conversation-name">Choose a member</h2></div><span id="conversation-status" class="tag">--</span></div><div id="conversation-summary" class="conversation-summary">Select a conversation to inspect its hiring chat status.</div><div id="conversation-messages" class="conversation-messages"></div></section>
+    </div>
+    <div id="settings-panel" class="tab-panel" hidden>
+      <section class="settings-form">
+        <div class="section-kicker"><span>BOT CONFIGURATION</span><span>LOCAL .ENV</span></div>
+        <p class="settings-note">Secrets are masked when loaded. Leave a secret field blank to keep its current value. Changes are saved to the local service environment.</p>
+        <div class="settings-group"><h2>AI / DEEPSEEK</h2><div class="field"><label for="openrouter_api_key">OpenRouter API key</label><input id="openrouter_api_key" type="password" autocomplete="off"></div><div class="field"><label for="openrouter_model">Model</label><input id="openrouter_model" type="text"></div><div class="field"><label for="openrouter_base_url">OpenRouter base URL</label><input id="openrouter_base_url" type="url"></div></div>
+        <div class="settings-group"><h2>HIMALAYAS / MCP</h2><div class="field"><label for="himalayas_mcp_url">MCP URL</label><input id="himalayas_mcp_url" type="url"></div><div class="field"><label for="himalayas_mcp_token">MCP token</label><input id="himalayas_mcp_token" type="password" autocomplete="off"></div></div>
+        <div class="settings-group"><h2>DATA SERVICES</h2><div class="field"><label for="supabase_url">Supabase URL</label><input id="supabase_url" type="url"></div><div class="field"><label for="supabase_key">Supabase key</label><input id="supabase_key" type="password" autocomplete="off"></div><div class="field"><label for="supabase_table">Supabase table</label><input id="supabase_table" type="text"></div></div>
+        <div class="settings-group"><h2>GITHUB</h2><div class="field"><label for="github_token">GitHub token</label><input id="github_token" type="password" autocomplete="off"></div><div class="field"><label for="github_api_url">GitHub API URL</label><input id="github_api_url" type="url"></div><div class="field"><label for="github_owner">Repository owner</label><input id="github_owner" type="text"></div><div class="field"><label for="github_repo">Repository name</label><input id="github_repo" type="text"></div><p class="settings-note">GitHub invitation actions are not enabled yet; this stores the token and repository context for the future integration.</p></div>
+        <div class="settings-group"><h2>DELIVERY</h2><div class="field"><label for="auto_send">Automatic follow-up delivery</label><select id="auto_send"><option value="false">Off</option><option value="true">On</option></select></div><div class="field"><label for="min_message_delay_seconds">Minimum message interval (seconds)</label><input id="min_message_delay_seconds" type="number" min="5"></div><div class="field"><label for="max_message_delay_seconds">Maximum follow-up delay (seconds)</label><input id="max_message_delay_seconds" type="number" min="5"></div><div class="field"><label for="delivery_poll_interval_seconds">Delivery check interval (seconds)</label><input id="delivery_poll_interval_seconds" type="number" min="1"></div><div class="field"><label for="reply_poll_interval_seconds">Reply poll interval (seconds)</label><input id="reply_poll_interval_seconds" type="number" min="10"></div><div class="field"><label for="reply_processing_concurrency">Concurrent reply conversations</label><input id="reply_processing_concurrency" type="number" min="1"></div><div class="field"><label for="profile_fetch_concurrency">Profile fetch concurrency</label><input id="profile_fetch_concurrency" type="number" min="1"></div><div class="field"><label for="message_generation_concurrency">AI generation concurrency</label><input id="message_generation_concurrency" type="number" min="1"></div></div>
+        <button id="save-settings" class="save-settings">Save settings</button><p id="settings-result" class="settings-result"></p>
+      </section>
+    </div>
+  </main><script src="popup.js"></script>
+</body>
+</html>
