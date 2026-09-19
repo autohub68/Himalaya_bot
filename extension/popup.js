@@ -4,14 +4,29 @@ let currentPage = 1;
 let refreshing = false;
 let selectedConversation = null;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[character]));
+// Every Chrome profile has its own extension storage, so each profile gets its own account id.
+// The single shared backend uses it to keep logins, candidates, queues and replies separate.
+const accountReady = new Promise((resolve) => {
+  const create = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)).replace(/[^A-Za-z0-9]/g, '');
+  const fallback = create();
+  try {
+    chrome.storage.local.get('accountId', (stored) => {
+      if (stored && stored.accountId) return resolve(stored.accountId);
+      chrome.storage.local.set({accountId: fallback}, () => resolve(fallback));
+    });
+  } catch (error) { resolve(fallback); }
+});
 async function request(path, options = {}) {
-  const response = await fetch(`${API}${path}`, {headers: {'Content-Type': 'application/json'}, ...options});
+  const accountId = await accountReady;
+  const response = await fetch(`${API}${path}`, {...options, headers: {'Content-Type': 'application/json', 'X-Account-Id': accountId, ...(options.headers || {})}});
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
 const settingFields = ['openrouter_api_key', 'openrouter_model', 'openrouter_base_url', 'himalayas_mcp_url', 'himalayas_mcp_token', 'supabase_url', 'supabase_key', 'supabase_table', 'github_token', 'github_api_url', 'github_owner', 'github_repo', 'auto_send', 'min_message_delay_seconds', 'max_message_delay_seconds', 'delivery_poll_interval_seconds', 'reply_poll_interval_seconds', 'reply_processing_concurrency', 'profile_fetch_concurrency', 'message_generation_concurrency'];
 async function loadSettings() {
-  const values = await request('/api/settings');
+  const [values, account] = await Promise.all([request('/api/settings'), request('/api/account')]);
+  $('account_label').value = account.label || '';
+  $('account-id').textContent = `Account id: ${account.id}`;
   const secretFields = ['openrouter_api_key', 'himalayas_mcp_token', 'supabase_key', 'github_token'];
   settingFields.forEach((field) => {
     if (secretFields.includes(field)) {
@@ -118,13 +133,13 @@ $('server-toggle').onclick = async () => {
   catch (error) { $('status').textContent = /not found|forbidden/i.test(error.message) ? 'Helper not installed. Run scripts/install-native-host.sh, then reload the extension.' : `Server control failed: ${error.message}`; }
   finally { button.disabled = false; }
 };
-$('auth').onclick = () => { window.open(`${API}/api/auth/start`, '_blank'); };
+$('auth').onclick = async () => { window.open(`${API}/api/auth/start?account_id=${encodeURIComponent(await accountReady)}`, '_blank'); };
 $('dashboard-tab').onclick = () => showTab('dashboard');
 $('chats-tab').onclick = () => showTab('chats');
 $('settings-tab').onclick = () => showTab('settings');
-$('save-settings').onclick = async () => { const button = $('save-settings'); button.disabled = true; $('settings-result').textContent = 'Saving...'; const values = {}; settingFields.forEach((field) => { const value = $(field).value.trim(); if (value) values[field] = ['min_message_delay_seconds', 'max_message_delay_seconds', 'delivery_poll_interval_seconds', 'reply_poll_interval_seconds', 'reply_processing_concurrency', 'profile_fetch_concurrency', 'message_generation_concurrency'].includes(field) ? Number(value) : field === 'auto_send' ? value === 'true' : value; }); try { await request('/api/settings', {method: 'PUT', body: JSON.stringify(values)}); $('settings-result').textContent = 'Settings saved.'; } catch (error) { $('settings-result').textContent = `Save failed: ${error.message}`; } finally { button.disabled = false; } };
-function connectDashboardEvents() {
-  const source = new EventSource(`${API}/api/events`);
+$('save-settings').onclick = async () => { const button = $('save-settings'); button.disabled = true; $('settings-result').textContent = 'Saving...'; const values = {}; settingFields.forEach((field) => { const value = $(field).value.trim(); if (value) values[field] = ['min_message_delay_seconds', 'max_message_delay_seconds', 'delivery_poll_interval_seconds', 'reply_poll_interval_seconds', 'reply_processing_concurrency', 'profile_fetch_concurrency', 'message_generation_concurrency'].includes(field) ? Number(value) : field === 'auto_send' ? value === 'true' : value; }); try { await request('/api/settings', {method: 'PUT', body: JSON.stringify(values)}); await request('/api/account', {method: 'PUT', body: JSON.stringify({label: $('account_label').value.trim()})}); $('settings-result').textContent = 'Settings saved.'; } catch (error) { $('settings-result').textContent = `Save failed: ${error.message}`; } finally { button.disabled = false; } };
+async function connectDashboardEvents() {
+  const source = new EventSource(`${API}/api/events?account_id=${encodeURIComponent(await accountReady)}`);
   source.addEventListener('dashboard-update', refresh);
   source.onerror = () => { source.close(); setTimeout(connectDashboardEvents, 5000); };
 }

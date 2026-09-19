@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 import httpx
 
 from .config import settings
-from .db import connection, utc_now
+from .db import LEGACY_ACCOUNT, connection, utc_now
 
 
 def _challenge(verifier: str) -> str:
@@ -17,7 +17,7 @@ def _challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-async def authorization_url() -> str:
+async def authorization_url(account_id: str) -> str:
     client_id = settings.himalayas_oauth_client_id
     client_secret = settings.himalayas_oauth_client_secret or None
     if not client_id:
@@ -37,12 +37,12 @@ async def authorization_url() -> str:
     state = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(64)
     with connection() as conn:
-        conn.execute("DELETE FROM oauth_state")
-        conn.execute("INSERT INTO oauth_state (state, code_verifier, created_at) VALUES (?, ?, ?)", (state, verifier, utc_now()))
+        conn.execute("DELETE FROM oauth_state WHERE account_id=?", (account_id,))
+        conn.execute("INSERT INTO oauth_state (state, account_id, code_verifier, created_at) VALUES (?, ?, ?, ?)", (state, account_id, verifier, utc_now()))
         conn.execute(
-            "INSERT INTO oauth_tokens (id, access_token, refresh_token, expires_at, client_id, client_secret) VALUES (1, '', NULL, NULL, ?, ?) "
-            "ON CONFLICT(id) DO UPDATE SET client_id=excluded.client_id, client_secret=excluded.client_secret",
-            (client_id, client_secret),
+            "INSERT INTO oauth_tokens (account_id, access_token, refresh_token, expires_at, client_id, client_secret) VALUES (?, '', NULL, NULL, ?, ?) "
+            "ON CONFLICT(account_id) DO UPDATE SET client_id=excluded.client_id, client_secret=excluded.client_secret",
+            (account_id, client_id, client_secret),
         )
     query = urlencode({
         "response_type": "code", "client_id": client_id,
@@ -55,8 +55,8 @@ async def authorization_url() -> str:
 
 async def exchange_code(code: str, state: str) -> None:
     with connection() as conn:
-        oauth_state = conn.execute("SELECT code_verifier FROM oauth_state WHERE state=?", (state,)).fetchone()
-        client = conn.execute("SELECT client_id, client_secret FROM oauth_tokens WHERE id=1").fetchone()
+        oauth_state = conn.execute("SELECT account_id, code_verifier FROM oauth_state WHERE state=?", (state,)).fetchone()
+        client = oauth_state and conn.execute("SELECT client_id, client_secret FROM oauth_tokens WHERE account_id=?", (oauth_state["account_id"],)).fetchone()
     if not oauth_state or not client:
         raise RuntimeError("OAuth state is missing or expired")
     payload = {"grant_type": "authorization_code", "code": code, "redirect_uri": settings.himalayas_oauth_redirect_uri, "client_id": client["client_id"], "code_verifier": oauth_state["code_verifier"]}
@@ -65,24 +65,30 @@ async def exchange_code(code: str, state: str) -> None:
     async with httpx.AsyncClient(timeout=30) as http:
         response = await http.post(settings.himalayas_oauth_token_endpoint, data=payload)
     response.raise_for_status()
-    save_token(response.json())
+    account_id = oauth_state["account_id"]
+    save_token(account_id, response.json())
     with connection() as conn:
-        conn.execute("DELETE FROM oauth_state")
+        conn.execute("DELETE FROM oauth_state WHERE account_id=?", (account_id,))
 
 
-def save_token(token: dict) -> None:
+def save_token(account_id: str, token: dict) -> None:
     with connection() as conn:
         conn.execute(
-            "UPDATE oauth_tokens SET access_token=?, refresh_token=COALESCE(?, refresh_token), expires_at=? WHERE id=1",
-            (token["access_token"], token.get("refresh_token"), time.time() + float(token.get("expires_in", 3600))),
+            "UPDATE oauth_tokens SET access_token=?, refresh_token=COALESCE(?, refresh_token), expires_at=? WHERE account_id=?",
+            (token["access_token"], token.get("refresh_token"), time.time() + float(token.get("expires_in", 3600)), account_id),
         )
 
 
-async def access_token() -> str:
-    if settings.himalayas_mcp_token:
+def static_token_applies(account_id: str) -> bool:
+    # A fixed token belongs to one Himalayas account, so it must never be shared across accounts.
+    return bool(settings.himalayas_mcp_token) and account_id == LEGACY_ACCOUNT
+
+
+async def access_token(account_id: str) -> str:
+    if static_token_applies(account_id):
         return settings.himalayas_mcp_token
     with connection() as conn:
-        row = conn.execute("SELECT * FROM oauth_tokens WHERE id=1").fetchone()
+        row = conn.execute("SELECT * FROM oauth_tokens WHERE account_id=?", (account_id,)).fetchone()
     if not row or not row["access_token"]:
         raise RuntimeError("Himalayas authorization required. Open /api/auth/start first.")
     if not row["expires_at"] or row["expires_at"] > time.time() + 60:
@@ -96,16 +102,22 @@ async def access_token() -> str:
         response = await http.post(settings.himalayas_oauth_token_endpoint, data=payload)
     response.raise_for_status()
     token = response.json()
-    save_token(token)
+    save_token(account_id, token)
     return token["access_token"]
 
 
-def oauth_status() -> bool:
-    if settings.himalayas_mcp_token:
+def oauth_status(account_id: str) -> bool:
+    if static_token_applies(account_id):
         return True
     with connection() as conn:
-        row = conn.execute("SELECT access_token FROM oauth_tokens WHERE id=1").fetchone()
+        row = conn.execute("SELECT access_token FROM oauth_tokens WHERE account_id=?", (account_id,)).fetchone()
     return bool(row and row["access_token"])
+
+
+def authorized_accounts() -> list[str]:
+    with connection() as conn:
+        rows = conn.execute("SELECT account_id FROM oauth_tokens WHERE access_token != ''").fetchall()
+    return [row["account_id"] for row in rows]
 
 
 class MCPError(RuntimeError):
@@ -113,7 +125,8 @@ class MCPError(RuntimeError):
 
 
 class HimalayasMCP:
-    def __init__(self) -> None:
+    def __init__(self, account_id: str) -> None:
+        self.account_id = account_id
         if not settings.himalayas_mcp_url:
             raise MCPError("HIMALAYAS_MCP_URL is not configured")
         headers = {
@@ -131,7 +144,7 @@ class HimalayasMCP:
             "params": {"name": tool_name, "arguments": arguments},
         }
         try:
-            token = await access_token()
+            token = await access_token(self.account_id)
         except Exception as exc:
             raise MCPError(str(exc)) from exc
         headers = {**self.headers, "Authorization": f"Bearer {token}"}

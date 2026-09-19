@@ -22,6 +22,23 @@ A local-first recruiting assistant with a Chromium extension UI and a Python bac
 
 The first-outreach action creates a paced delivery queue when started. The scheduler sends one due campaign message at a time using `MIN_MESSAGE_DELAY_SECONDS`; follow-up messages remain controlled by `AUTO_SEND`. Use it only where the platform, candidate consent, and applicable law permit automated outreach.
 
+## Conversation flow
+
+Every candidate is contacted. Nobody is skipped because of their profile. The model reads the whole profile and picks the ONE closest role of the ten. If no role matches exactly, it uses transferable strengths (for example a designer becomes Marketing Manager, a lawyer becomes Compliance Officer). If a profile has almost no text, the first message makes no claim about the candidate. The only skips are duplicate protection: a candidate already messaged, or one the shared contact ledger shows another account already contacted. Each candidate reply moves the chat one step. The bot sends its reply 1 to 2 minutes after it sees the message. All messages follow ASD STE100.
+
+Developer roles: Full Stack, Backend, Frontend, AI Developer. Business roles: Business Development Manager, Client Relations Manager, Marketing Manager, Operations Manager, Financial Analyst, Compliance Officer.
+
+1. **First message** (about 40 words): names one or two real skills or results, suggests the role, and asks if the candidate wants to hear more.
+2. **Company introduction**, after an interested reply: short business summary, the website, one line about the role (business roles), the **pay rate**, and one question about interest and confidence. The rate text is fixed per role (`rate` in `NON_DEV_ROLES`, and `DEV_RATES` for the developer roles) and inserted by code word for word, so the model can never change a number. Developer rates are USD per hour.
+3. **Hiring process overview**, after a positive reply. Fixed text in `process_message()` in `app/ai.py`. Developers: technical assessment, project discussion, technical fit. Business roles: the process from the job description (application form with a lightweight assessment, interview with the leadership team, final interview and contract). Asks if the process works.
+4. **After the candidate agrees, the step depends on the role:**
+   - *Developer roles:* an assessment overview for the role and skills (`ASSESSMENT_OVERVIEWS` in `app/ai.py`), then a request for a GitHub username. The bot reads the username, checks that the account exists, invites it to the repository set in Settings, and says the requirements are in the project folder.
+   - *Business roles:* the careers-page link for the suggested position (`NON_DEV_ROLES` in `app/ai.py`) and a request to submit the application there.
+
+Other cases: a question gets a short answer and the open question is asked again. A decline gets a polite close and the chat stops. After the last step, only questions get replies. An unknown GitHub name gets a request to check the spelling. If a candidate sends a second message before the first reply is sent, one reply answers both. If the GitHub token, owner, or repository is empty or wrong, the candidate gets one short holding message ("We will send your invitation soon") and the error shows in the chat details. The bot retries the invitation automatically every 5 minutes once the GitHub settings are complete, then sends the normal invitation message.
+
+Business roles: the bot states only the facts written in `NON_DEV_ROLES` (duties, requirements, engagement, why people join). Pay is stated only as the official rate text, in step 2 and when a candidate asks about it again. A code check rejects any model text that shows another money figure or refuses, promises, or negotiates pay, and regenerates it (or sends a safe fixed reply). Anything beyond the rate (a higher rate, benefits, contract terms) gets a reply that the team will discuss it in a later step. For any other missing detail it also says the team will discuss it later. To make it answer more about a role, add facts there. Financial Analyst and Compliance Officer are complete except that the Compliance Officer interview name is not on file, so step 3 says "an interview" for it.
+
 ## Oceanparkasset recruiting context
 
 DeepSeek receives a dedicated Oceanparkasset recruiting brief for every first message and reply. Messages must connect verified candidate experience to relevant platform work, follow ASD STE100, and avoid investment solicitation, profit claims, unsupported company claims, or invented role details.
@@ -61,6 +78,17 @@ Before first use, run `supabase_schema.sql` in the Supabase SQL Editor. The send
 
 4. Load `extension/` in Chrome or Chromium at `chrome://extensions` using **Load unpacked** — select the `extension` folder itself, not the project root. As long as the background service is running (step 3), the extension works immediately — no separate server process to start each time.
 
+## Several Himalayas accounts (one Chrome profile each)
+
+One backend serves any number of extensions. Load the extension in each Chrome profile and click **Connect Himalayas** in that profile with that profile's Himalayas login.
+
+- Each extension creates an account id in its own profile storage and sends it as `X-Account-Id` on every request. The backend keeps a separate Himalayas login, candidate list, message queue, automation, reply monitor and progress per account. One profile cannot see or send another profile's data.
+- Everything shares one database and one Supabase contact ledger. One sequential delivery loop sends for all accounts, so the "already contacted" check and the send never interleave. A member contacted by one account is skipped by every other account.
+- Only one server runs at a time (port 8765). Extra **Start server** clicks in other profiles find it already running.
+- Name each profile in **Settings > This browser profile** to tell them apart. `GET /api/accounts` lists all accounts with their queue and login state.
+- Data from the single-account version is adopted by the first extension that connects. Connect the profile that owns your existing Himalayas login first.
+- Settings such as API keys, delays and GitHub are shared by all profiles.
+
 ## Running on another machine
 
 Each machine needs its own copy of the backend running as a background service — the extension alone has no server logic. On a new machine:
@@ -79,7 +107,7 @@ Each machine needs its own copy of the backend running as a background service �
 4. Load `extension/` in Chrome on that machine via **Load unpacked**.
 5. Open the extension and click **Connect Himalayas** to authorize that machine's backend — the OAuth token is stored locally per machine, so this step is needed again even if you copied `.env` over.
 
-Only run the backend on **one machine at a time** against the same Himalayas account. Two live instances polling and sending concurrently can race on the same candidates/messages — this is the exact kind of duplicate-delivery bug already found and fixed earlier in this project (an orphaned duplicate process double-processing the same queue). Stop the service on one machine before starting it on another.
+Only run the backend on **one machine at a time** (all your Chrome profiles use that one server). Two live instances polling and sending concurrently can race on the same candidates/messages — this is the exact kind of duplicate-delivery bug already found and fixed earlier in this project (an orphaned duplicate process double-processing the same queue). Stop the service on one machine before starting it on another.
 
 ## API shape
 
